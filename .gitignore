@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.DS_Store
+
+# Streamlit Cache
+.streamlit/
+.stcache/
+.stcache-v1/
+.stcache-v2/
+
+# Logs & Env Files
+*.log
+.env
+secrets.toml

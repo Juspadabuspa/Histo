@@ -1,0 +1,12 @@
+Club Level - Best Season, Rivals Comparison, Highest ELO, Lowest ELO, Best Decade, Trophies at each ELO, who they lost and beat each season etc, record vs higher ELO vs Lower ELO, best months, avg points, prem wins, avg positions, years in the prem, overperformance/underperformance in league table
+
+League Level - Avg Elo, ELO Spread (Best - Worst), Teams in each ELO bracket (1000-1100-1200-1300-1400-1500), Biggest Rises, Biggest falls (Season to Season),
+
+Manager Level - Avg ELO, Best ELO, Comparison, Higher/Lower ELO record, record vs manager, best months, top-4 finishes, relegations, prem wins, avg points, overperformance/underperformance in league table, avg position
+
+
+Leaderboard - Managers, Clubs, Win Rate, Team ELO (Single Season/All Time) and same for managers
+
+Rivals - Cumulative better/worse seasons, 
+
+I would also like AI assisted descriptions of each era, season, downturn and upturn

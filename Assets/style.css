@@ -1,0 +1,49 @@
+/* Global Styles */
+body {
+    background-color: #f8f9fa;
+    color: #333333;
+    font-family: 'Arial', sans-serif;
+}
+
+/* Headers */
+h1, h2, h3 {
+    color: #0e1e5b;
+    font-weight: bold;
+}
+
+/* Buttons */
+.stButton > button {
+    width: 100%;
+    border-radius: 8px;
+    background-color: #0e1e5b;
+    color: white;
+    font-weight: 600;
+    padding: 10px 15px;
+    transition: background-color 0.3s ease-in-out;
+}
+.stButton > button:hover {
+    background-color: #1d3a8a;
+}
+
+/* Sidebar */
+.stSidebar {
+    background-color: #10151e;
+    border-right: 2px solid #10151e;
+}
+
+/* Team Colors */
+.team-card {
+    border-radius: 8px;
+    padding: 12px;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* High Contrast Mode */
+.high-contrast {
+    background-color: #121212 !important;
+    color: #ffffff !important;
+}
+.high-contrast h1, .high-contrast h2, .high-contrast h3 {
+    color: #ffffff !important;
+}
