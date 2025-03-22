@@ -41,121 +41,43 @@ def encode_image(image_path):
 def inject_css():
     st.markdown("""
     <style>
-    /* Main styles */
-    .main {
-        background-color: #f9f9f9;
-        color: #333;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    
-    /* Header styles */
-    h1, h2, h3 {
-        color: #0e1e5b;
-        font-weight: 600;
-    }
-    
-    /* Card-like containers */
-    .stCard {
-        background-color: white;
-        border-radius: 8px;
-        padding: 20px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-    
-    /* Team cards */
+    /* Team cards with fixed size and left-aligned logo */
+    /* Team cards with fixed size and left-aligned logo */
     .team-card {
+        width: 200px;  /* Fixed width for the cards */
+        height: 100px;  /* Fixed height for the cards */
         padding: 10px;
         border-radius: 5px;
         margin: 5px;
         font-weight: 500;
-        text-align: center;
+        text-align: left;  /* Align text to the left */
         transition: transform 0.2s;
+        display: flex;
+        align-items: center;  /* Vertically center the content */
     }
+
+    /* Display logo (image) on the left side */
+    .team-card img {
+        width: 50px;  /* Fixed size for the logo */
+        height: 50px;  /* Fixed size for the logo */
+        object-fit: contain;
+        margin-right: 10px;  /* Space between the image and text */
+    }
+
+    /* Styling for the text or details next to the logo */
+    .team-card .team-info {
+        flex: 1;  /* Make sure the text takes the remaining space */
+        font-size: 14px;
+    }
+
+    /* Hover effect for the card */
     .team-card:hover {
         transform: scale(1.05);
     }
-    
-    /* Focus indicators for accessibility */
-    *:focus {
-        outline: 3px solid #4b92db !important;
-        outline-offset: 2px !important;
-    }
-    
-    /* Custom tab styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #f0f2f6;
-        border-radius: 5px 5px 0px 0px;
-        padding: 10px 20px;
-        font-weight: 500;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #e0e4ee;
-        border-bottom: 3px solid #0e1e5b;
-    }
-    
-    /* Button styling */
-    .stButton>button {
-        width: 100%;
-        border-radius: 5px;
-        background-color: #0e1e5b;
-        color: white;
-        font-weight: 500;
-        padding: 10px 15px;
-    }
-    .stButton>button:hover {
-        background-color: #1d3a8a;
-    }
-    
-    /* Color scale for visual consistency */
-    .low-elo {
-        color: #e74c3c;
-    }
-    .medium-elo {
-        color: #f39c12;
-    }
-    .high-elo {
-        color: #2ecc71;
-    }
-    
-    /* Improved selectbox */
-    div[data-baseweb="select"] {
-        margin-bottom: 10px;
-    }
-    
-    /* Improved spinner */
-    .stSpinner {
-        text-align: center;
-        margin: 20px 0;
-    }
-    
-    /* High contrast mode toggle */
-    .high-contrast-toggle {
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-    }
-    
-    /* High contrast mode styles */
-    .high-contrast {
-        background-color: #000 !important;
-        color: #fff !important;
-    }
-    .high-contrast h1, .high-contrast h2, .high-contrast h3 {
-        color: #fff !important;
-    }
-    .high-contrast .stCard {
-        background-color: #222 !important;
-        color: #fff !important;
-    }
+
     </style>
     """, unsafe_allow_html=True)
+
     
 # Define team colours
 team_colours = {
@@ -623,7 +545,7 @@ def calculate_team_stats(team, match_history):
         opp_total = opp_matches.shape[0]
         win_rate = round((opp_wins / opp_total) * 100, 1) if opp_total > 0 else 0
 
-        if opp_total >= 2:  # Ensure at least 2 matches played
+        if opp_total >= 2:  # Ensure at least  matches played
             opponent_stats.append({"Opponent": opp, "Matches Played": opp_total, "Win Rate": win_rate})
 
     opponent_stats_df = pd.DataFrame(opponent_stats)
@@ -662,11 +584,18 @@ def display_category_cards(elite, contenders, mid_table, relegation):
     for category, teams in categories.items():
         with st.container():
             st.markdown(f"""
-            <div style="{category_styles[category]} padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 10px;">
+            <div style="{category_styles[category]} padding: 15px; border-radius: 10px; text-align: left; margin-bottom: 10px;">
                 <h4>{category} Teams</h4>
-                <p>{", ".join(teams) if teams else "No teams in this category"}</p>
+                <div class="team-card">
+                    <img src="path/to/team-logo.png" alt="Team Logo">
+                    <div class="team-info">
+                        <p>{", ".join(teams) if teams else "No teams in this category"}</p>
+                    </div>
+                </div>
             </div>
             """, unsafe_allow_html=True)
+
+
 
 
 # Enhanced team analysis view
@@ -877,13 +806,14 @@ def show_club_dashboard(match_history, settings):
 
     team = settings["team"]
     team_matches = match_history[(match_history["HomeTeam"] == team) | (match_history["AwayTeam"] == team)]
-
     team_logo_path = f"Assets/team_logos/{team}.png"
+    
+    # Display team logo
     if os.path.exists(team_logo_path):
         st.image(team_logo_path, width=150)
     else:
         st.warning(f"Image not found: {team_logo_path}")
-
+    
     stats = calculate_team_stats(team, match_history)
     
     # Display Percentage-Based Performance (Progress Bars)
@@ -904,48 +834,79 @@ def show_club_dashboard(match_history, settings):
     st.write(f"⚪ Draw Rate: **{stats['lower_draw_pct']}%**")
     st.progress(stats["lower_loss_pct"] / 100)
     st.write(f"🔴 Loss Rate: **{stats['lower_loss_pct']}%**")
-
-    # Display Opponent-Based Performance
+    
+    # Horizontal Scrolling Cards for Opponent-Based Performance
     st.subheader("🆚 Opponent-Based Performance")
-    
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        best_logo = get_team_logo_path(stats["best_opponent"]["Opponent"])
-        best_logo_base64 = encode_image(best_logo)
-        st.markdown(f"""
-        <div style="background-color: #003366; padding: 15px; border-radius: 8px; text-align: center;">
-            <img src="data:image/png;base64,{best_logo_base64}" width="60" style="border-radius: 5px; margin-bottom: 8px;">
-            <h4 style="color: #FFD700;">🏆 Best Opponent</h4>
-            <p style="color: white; font-size: 18px;"><b>{stats['best_opponent']['Opponent']}</b></p>
-            <p style="color: white;">Win Rate: <b>{stats['best_opponent']['Win Rate']}%</b></p>
-        </div>
-        """, unsafe_allow_html=True)
 
-    with col2:
-        worst_logo = get_team_logo_path(stats["worst_opponent"]["Opponent"])
-        worst_logo_base64 = encode_image(worst_logo)
-        st.markdown(f"""
-        <div style="background-color: #660000; padding: 15px; border-radius: 8px; text-align: center;">
-            <img src="data:image/png;base64,{worst_logo_base64}" width="60" style="border-radius: 5px; margin-bottom: 8px;">
-            <h4 style="color: #FFD700;">📉 Worst Opponent</h4>
-            <p style="color: white; font-size: 18px;"><b>{stats['worst_opponent']['Opponent']}</b></p>
-            <p style="color: white;">Win Rate: <b>{stats['worst_opponent']['Win Rate']}%</b></p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Add custom HTML and CSS for horizontal scrolling
+    st.markdown("""
+    <style>
+    .scroll-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 15px;
+        padding: 10px;
+        flex-wrap: nowrap;
+    }
+    .card {
+        width: 200px;
+        background-color: #003366;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        flex: 0 0 auto;
+    }
+    .card img {
+        width: 60px;
+        border-radius: 5px;
+        margin-bottom: 8px;
+    }
+    .card h4 {
+        color: #FFD700;
+    }
+    .card p {
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    with col3:
-        most_played_logo = get_team_logo_path(stats["most_played_opponent"]["Opponent"])
-        most_played_logo_base64 = encode_image(most_played_logo)
-        st.markdown(f"""
-        <div style="background-color: #444444; padding: 15px; border-radius: 8px; text-align: center;">
-            <img src="data:image/png;base64,{most_played_logo_base64}" width="60" style="border-radius: 5px; margin-bottom: 8px;">
-            <h4 style="color: #FFD700;">🔄 Most Played Opponent</h4>
-            <p style="color: white; font-size: 18px;"><b>{stats['most_played_opponent']['Opponent']}</b></p>
-            <p style="color: white;">Matches Played: <b>{stats['most_played_opponent']['Matches Played']}</b></p>
+    # Generate the cards inside the scrollable container
+    best_logo = get_team_logo_path(stats["best_opponent"]["Opponent"])
+    best_logo_base64 = encode_image(best_logo)
+
+    worst_logo = get_team_logo_path(stats["worst_opponent"]["Opponent"])
+    worst_logo_base64 = encode_image(worst_logo)
+
+    most_played_logo = get_team_logo_path(stats["most_played_opponent"]["Opponent"])
+    most_played_logo_base64 = encode_image(most_played_logo)
+
+    # Scrollable cards HTML
+    st.markdown(f"""
+    <div class="scroll-container">
+        <div class="card">
+            <img src="data:image/png;base64,{best_logo_base64}" alt="Best Opponent">
+            <h4>🏆 Best Opponent</h4>
+            <p>{stats['best_opponent']['Opponent']}</p>
+            <p>Win Rate: <b>{stats['best_opponent']['Win Rate']}%</b></p>
         </div>
-        """, unsafe_allow_html=True)
+        <div class="card">
+            <img src="data:image/png;base64,{worst_logo_base64}" alt="Worst Opponent">
+            <h4>📉 Worst Opponent</h4>
+            <p>{stats['worst_opponent']['Opponent']}</p>
+            <p>Win Rate: <b>{stats['worst_opponent']['Win Rate']}%</b></p>
+        </div>
+        <div class="card">
+            <img src="data:image/png;base64,{most_played_logo_base64}" alt="Most Played Opponent">
+            <h4>🔄 Most Played Opponent</h4>
+            <p>{stats['most_played_opponent']['Opponent']}</p>
+            <p>Matches Played: <b>{stats['most_played_opponent']['Matches Played']}</b></p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+
+
 
 
 def show_about():
