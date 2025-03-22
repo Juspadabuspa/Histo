@@ -574,7 +574,7 @@ def create_header():
         st.markdown(
             f"""
             <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
-                <h1 style="color:#FFFFFF; margin-bottom: 5px;">Premier League ELO Tracker</h1>
+                <h1 style="color:#FFFFFF; margin-bottom: 5px;">ELO Tracker</h1>
             </div>
             """, unsafe_allow_html=True
         )
