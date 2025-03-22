@@ -623,7 +623,7 @@ def calculate_team_stats(team, match_history):
         opp_total = opp_matches.shape[0]
         win_rate = round((opp_wins / opp_total) * 100, 1) if opp_total > 0 else 0
 
-        if opp_total >= 10:  # Ensure at least 10 matches played
+        if opp_total >= 2:  # Ensure at least 2 matches played
             opponent_stats.append({"Opponent": opp, "Matches Played": opp_total, "Win Rate": win_rate})
 
     opponent_stats_df = pd.DataFrame(opponent_stats)
