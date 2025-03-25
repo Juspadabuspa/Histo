@@ -10,11 +10,15 @@ import numpy as np
 import calendar
 import base64
 
-# Constants
-INITIAL_ELO = 1000
-K_FACTOR = 40
+# Constants with tunable parameters
+K_BASE = 40          # Base K-factor
+K_RATING_DIV = 400   # Standard ELO divisor
+HOME_ADVANTAGE = 30  # Home team advantage in ELO points
 AWAY_WIN_BONUS = 1.1
+GOAL_DIFF_WEIGHT = 0.5  # Impact factor for goal difference
 LATE_SEASON_WEIGHT = 1.2
+INITIAL_ELO = 1000
+INACTIVITY_DECAY = 0.95  # Decay factor for inactive teams
 debug_log_path = os.path.join("C:", "Users", "3fold", "Documents", "Prem ELO", "debug_log.txt")
 
 st.set_page_config(
@@ -156,6 +160,104 @@ team_colours = {
     "Luton": {"primary": "#000000", "secondary": "#FFFFFF"}  # Orange and White
 }
 
+derby_matrix = {
+    # London Derbies (all London clubs are considered local rivals)
+    ('Arsenal', 'Chelsea'): True,
+    ('Arsenal', 'Tottenham'): True,
+    ('Arsenal', 'West Ham'): True,
+    ('Arsenal', 'Crystal Palace'): True,
+    ('Arsenal', 'Fulham'): True,
+    ('Arsenal', 'QPR'): True,
+    ('Arsenal', 'Brentford'): True,
+    ('Arsenal', 'Charlton'): True,
+    ('Arsenal', 'Wimbledon'): True,
+    
+    ('Chelsea', 'Tottenham'): True,
+    ('Chelsea', 'West Ham'): True,
+    ('Chelsea', 'Crystal Palace'): True,
+    ('Chelsea', 'Fulham'): True,
+    ('Chelsea', 'QPR'): True,
+    ('Chelsea', 'Brentford'): True,
+    ('Chelsea', 'Charlton'): True,
+    ('Chelsea', 'Wimbledon'): True,
+    
+    ('Tottenham', 'West Ham'): True,
+    ('Tottenham', 'Crystal Palace'): True,
+    ('Tottenham', 'Fulham'): True,
+    ('Tottenham', 'QPR'): True,
+    ('Tottenham', 'Brentford'): True,
+    ('Tottenham', 'Charlton'): True,
+    ('Tottenham', 'Wimbledon'): True,
+    
+    ('West Ham', 'Crystal Palace'): True,
+    ('West Ham', 'Fulham'): True,
+    ('West Ham', 'QPR'): True,
+    ('West Ham', 'Brentford'): True,
+    ('West Ham', 'Charlton'): True,
+    ('West Ham', 'Wimbledon'): True,
+    
+    ('Crystal Palace', 'Fulham'): True,
+    ('Crystal Palace', 'QPR'): True,
+    ('Crystal Palace', 'Brentford'): True,
+    ('Crystal Palace', 'Charlton'): True,
+    ('Crystal Palace', 'Wimbledon'): True,
+    
+    ('Fulham', 'QPR'): True,
+    ('Fulham', 'Brentford'): True,
+    ('Fulham', 'Charlton'): True,
+    ('Fulham', 'Wimbledon'): True,
+    
+    ('QPR', 'Brentford'): True,
+    ('QPR', 'Charlton'): True,
+    ('QPR', 'Wimbledon'): True,
+    
+    ('Brentford', 'Charlton'): True,
+    ('Brentford', 'Wimbledon'): True,
+    
+    ('Charlton', 'Wimbledon'): True,
+    
+    # Greater Manchester Derbies
+    ('Man United', 'Man City'): True,
+    ('Bolton', 'Wigan'): True,
+    ('Bolton', 'Oldham'): True,
+    ('Wigan', 'Oldham'): True,
+    
+    # West Midlands Derbies
+    ('Aston Villa', 'Birmingham'): True,
+    ('Aston Villa', 'West Brom'): True,
+    ('Birmingham', 'West Brom'): True,
+    ('Birmingham', 'Coventry'): True,
+    ('Wolves', 'Coventry'): True,
+    
+    # North West Derbies
+    ('Liverpool', 'Everton'): True,
+    ('Blackburn', 'Blackpool'): True,
+    ('Burnley', 'Blackpool'): True,
+    
+    # North East Derbies
+    ('Newcastle', 'Sunderland'): True,
+    
+    # Yorkshire Derbies
+    ('Sheffield United', 'Sheffield Weds'): True,
+    ('Leeds', 'Huddersfield'): True,
+    ('Bradford', 'Barnsley'): True,
+    
+    # East Midlands Derbies
+    ('Derby', "Nott'm Forest"): True,
+    
+    # East Anglia Derbies
+    ('Norwich', 'Ipswich'): True,
+    
+    # South Coast Derbies
+    ('Southampton', 'Portsmouth'): True,
+    
+    # Wales Derbies
+    ('Cardiff', 'Swansea'): True,
+    
+    # Other Derbies
+    ('Watford', 'Luton'): True
+}
+
 # Define team colors with adjustments for readability
 # Define team colors with adjustments for readability
 def get_team_colors(team):
@@ -213,6 +315,134 @@ def plot_season_rankings(rankings, season):
 
     return fig
 
+def plot_season_overview_bubble(rankings, season):
+    """
+    Create an enhanced bubble chart for the season overview with custom color coding,
+    hover template, and axis styling.
+    
+    Parameters:
+      - rankings: DataFrame with columns 'Team', 'ELO', 'Rank', and 'Category'.
+      - season: Season identifier (used in the title).
+      
+    Returns:
+      - Plotly Express figure displaying the bubble chart.
+    """
+    fig = px.scatter(
+        rankings,
+        x="Rank",
+        y="ELO",
+        size="ELO",
+        color="Category",
+        hover_name="Team",
+        size_max=80,
+        title=f"Season Overview Bubble Chart - {season}",
+        labels={
+            "Rank": "Team Rank", 
+            "ELO": "Final ELO Rating", 
+            "Category": "Team Category"
+        },
+        color_discrete_sequence=px.colors.qualitative.Set1
+    )
+    
+    # Customize hover template to display more insights
+    fig.update_traces(
+        hovertemplate=
+            "<b>%{hovertext}</b><br>" +
+            "Rank: %{x}<br>" +
+            "ELO: %{y:.1f}<br>" +
+            "Category: %{marker.color}<extra></extra>",
+        opacity=0.85
+    )
+    
+    # Update layout for better readability
+    fig.update_layout(
+        xaxis=dict(
+            showgrid=True,
+            gridcolor="lightgrey",
+            zeroline=False,
+            title="Team Rank",
+            tickfont=dict(size=12, color="#333333")
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="lightgrey",
+            zeroline=False,
+            title="ELO Rating"
+        ),
+        font=dict(family="Arial", size=14, color="#333333"),
+        template="plotly_white",
+        plot_bgcolor="#f8f9fa",
+        legend_title_text="Team Category"
+    )
+    
+    return fig
+
+def plot_team_elo_timeline(team, season, team_history, match_history):
+    # Check if the season exists for the team
+    if season not in team_history[team]:
+        return None
+
+    # Get the ELO history for the season
+    history = team_history[team][season]  # List of tuples: (match_number, elo)
+    
+    # If the history has one extra entry (initial value), drop it
+    team_matches = match_history[(match_history["Season"] == season) &
+                                 ((match_history["HomeTeam"] == team) | (match_history["AwayTeam"] == team))]
+    if len(history) == len(team_matches) + 1:
+        history = history[1:]
+    
+    # Extract match numbers and ELO values
+    match_numbers = [num for num, elo in history]
+    elos = [elo for num, elo in history]
+
+    # Use the 'Date' column from the team's match records.
+    # We'll take only as many dates as we have ELO points.
+    dates = team_matches["Date"].iloc[:len(match_numbers)].tolist()
+    
+    # Ensure all arrays are the same length
+    min_length = min(len(match_numbers), len(elos), len(dates))
+    match_numbers = match_numbers[:min_length]
+    elos = elos[:min_length]
+    dates = dates[:min_length]
+    
+    # Build a DataFrame for plotting
+    df_plot = pd.DataFrame({
+        "Match Number": match_numbers,
+        "ELO": elos,
+        "Date": dates
+    })
+    
+    # Create a scatter plot with lines connecting markers (timeline view)
+    fig = px.scatter(
+        df_plot,
+        x="Date",
+        y="ELO",
+        hover_data=["Match Number"],
+        title=f"{team} ELO Progression - {season}",
+        labels={"Date": "Match Date", "ELO": "ELO Rating"}
+    )
+    
+    
+    primary, secondary, text = get_team_colors(team)
+    
+    fig.update_traces(
+        mode='lines+markers',
+        marker=dict(size=10, opacity=0.8, color=primary),
+        line=dict(color=primary, width=2)
+    )
+    
+    # Update layout for clarity
+    fig.update_layout(
+        xaxis=dict(showgrid=True, gridcolor="lightgrey", title="Match Date"),
+        yaxis=dict(showgrid=True, gridcolor="lightgrey", title="ELO Rating"),
+        font=dict(family="Arial", size=14, color="#333333"),
+        template="plotly_white",
+        plot_bgcolor="#f8f9fa"
+    )
+    
+    return fig
+
+
 # Function to create color-coded line charts
 def plot_elo_progression(team, season, team_history, match_history):
     if season in team_history[team]:
@@ -268,6 +498,10 @@ def get_team_category(rank, total_teams):
         return "Mid-Table"
 
 
+def is_derby_match(home_team, away_team):
+    return derby_matrix.get((home_team, away_team), False) or derby_matrix.get((away_team, home_team), False)
+
+
 def format_team_name(team_name):
     """Formats team names to match logo file naming conventions."""
     return team_name.strip()
@@ -279,6 +513,14 @@ def get_team_logo_path(team_name):
         return logo_path
     else:
         return "Assets/team_logos/default.png"
+
+def get_team_background_path(team):
+    background_path = f"Assets/team_backgrounds/{team}.jpg"
+    if os.path.exists(background_path):
+        return background_path
+    else:
+        return "Assets/team_backgrounds/default.jpg"  # fallback if the team image doesn't exist
+
 
 
 # Load the match results data
@@ -300,18 +542,86 @@ def load_data():
         st.error("Data file not found. Please ensure 'data/results.csv' exists.")
         return pd.DataFrame()
 
-# Calculate expected score
-def get_expected_score(elo_a, elo_b):
-    return 1 / (1 + 10 ** ((elo_b - elo_a) / 400))
+def dynamic_k_factor(rating, matches_played, is_new_team=False):
+    """
+    Calculate dynamic K-factor based on team's rating and match count.
+    Uses default matches_played = 10 and is_new_team = False when data is unavailable.
+    """
+    k_new = np.where(is_new_team, K_BASE * 1.5, K_BASE)
+    k_adjustment = np.maximum(5, np.minimum(matches_played, 30)) / 30
+    rating_adjustment = np.maximum(0.8, np.minimum(2000, rating) / 2000)
+    return k_new * (1.1 - k_adjustment * 0.3) * (1.2 - rating_adjustment * 0.2)
 
-# Update ELO ratings
-def update_elo(winner_elo, loser_elo, goal_diff, is_away, late_season):
-    weight = (goal_diff / 2) + (AWAY_WIN_BONUS if is_away else 1)
-    if late_season:
-        weight *= LATE_SEASON_WEIGHT
-    expected_winner = get_expected_score(winner_elo, loser_elo)
-    change = K_FACTOR * weight * (1 - expected_winner)
-    return winner_elo + change, loser_elo - change
+def get_expected_score(elo_a, elo_b, home_advantage=HOME_ADVANTAGE):
+    """
+    Calculate expected score for the home team using the ELO formula.
+    """
+    adjusted_elo_a = elo_a + home_advantage
+    return 1 / (1 + 10 ** ((elo_b - adjusted_elo_a) / K_RATING_DIV))
+
+def calculate_margin_factor(goal_diff):
+    """
+    Calculate a non-linear factor based on goal margin.
+    This dampens rating changes in the case of blowout results.
+    """
+    return np.log1p(np.abs(goal_diff)) * GOAL_DIFF_WEIGHT + 1
+
+def update_elo(home_elo, away_elo, home_goals, away_goals, late_season=False, derby=False):
+    # Compute goal difference
+    goal_diff = home_goals - away_goals
+
+    # Use default values: assume 10 matches played and teams are not new
+    k_home = dynamic_k_factor(home_elo, 10, False)
+    k_away = dynamic_k_factor(away_elo, 10, False)
+
+    # Calculate margin factor based on goal difference
+    margin_factor = calculate_margin_factor(goal_diff)
+    
+    # Apply derby multiplier if it's a derby match
+    if derby:
+        margin_factor *= 1.25  # You can adjust this multiplier as needed
+
+    # Calculate expected scores (home advantage applied for home team)
+    expected_home = get_expected_score(home_elo, away_elo, HOME_ADVANTAGE)
+    # For the away team, remove home advantage by inverting the formula:
+    expected_away = 1 / (1 + 10 ** ((home_elo - (away_elo - HOME_ADVANTAGE)) / K_RATING_DIV))
+
+    # Determine actual match outcomes
+    if goal_diff > 0:
+        home_result, away_result = 1, 0
+    elif goal_diff == 0:
+        home_result, away_result = 0.5, 0.5
+    else:
+        home_result, away_result = 0, 1
+
+    # Compute rating changes
+    home_change = k_home * margin_factor * (home_result - expected_home)
+    away_change = k_away * margin_factor * (away_result - expected_away)
+    
+    # Apply away win bonus if the away team wins
+    if goal_diff < 0:
+        away_change *= AWAY_WIN_BONUS
+
+    new_home_elo = home_elo + home_change
+    new_away_elo = away_elo + away_change
+    return new_home_elo, new_away_elo
+
+
+def apply_inactivity_decay(all_teams_elo, active_teams, weeks_inactive=None):
+    """
+    Apply rating decay for teams not active in the current period.
+    """
+    if weeks_inactive is None:
+        for team in all_teams_elo:
+            if team not in active_teams:
+                all_teams_elo[team] *= INACTIVITY_DECAY
+    else:
+        for team, weeks in weeks_inactive.items():
+            if weeks > 0:
+                all_teams_elo[team] *= (INACTIVITY_DECAY ** (weeks / 8))
+    return all_teams_elo
+
+
 
 # Calculate ELO for every match and season
 def calculate_elo(df):
@@ -321,34 +631,37 @@ def calculate_elo(df):
     season_final_elo = {}
     previous_season_elo = {}
     match_history = []
-    team_seasons = {} # Track which seasons each team has played in
+    team_seasons = {}  # Track which seasons each team has played in
 
     seasons = sorted(df["Season"].unique())
     for season in seasons:
         season_df = df[df["Season"] == season]
         teams_in_season = pd.concat([season_df["HomeTeam"], season_df["AwayTeam"]]).unique()
         
-        # Find teams that are new this season
+        # Identify new teams in the season
         new_teams = [team for team in teams_in_season if team not in previous_season_elo]
         
-        # Initialize ELO ratings for this season
+        # Initialize ELO ratings for the season
         for team in teams_in_season:
             if team not in team_history:
                 team_history[team] = {}
-            starting_elo = previous_season_elo.get(team, INITIAL_ELO) if team not in new_teams else INITIAL_ELO
+            # Use previous season ELO if available, otherwise use INITIAL_ELO
+            starting_elo = previous_season_elo.get(team, INITIAL_ELO)
+            # For new teams, we can also choose to reset to INITIAL_ELO if desired:
+            if team in new_teams:
+                starting_elo = INITIAL_ELO
             team_history[team][season] = [(0, starting_elo)]
             
-            # Track team seasons
+            # Track seasons for each team
             if team not in team_seasons:
                 team_seasons[team] = []
-            team_seasons[team].append(season)  # Add the season to the team's list
+            team_seasons[team].append(season)
 
-        
-        # Loop through each match
+        # Process each match in the season
         season_matches = season_df.reset_index(drop=True)
         total_matches = len(season_matches)
         for i, match in season_matches.iterrows():
-            home, away, result = match["HomeTeam"], match["AwayTeam"], match["FTR"]
+            home, away = match["HomeTeam"], match["AwayTeam"]
             home_goals, away_goals = match["FTHG"], match["FTAG"]
             match_date = match["DateTime"]
             late_season = i > (total_matches / 2)
@@ -356,31 +669,25 @@ def calculate_elo(df):
             current_home_elo = team_history[home][season][-1][1]
             current_away_elo = team_history[away][season][-1][1]
             
-            if result == "H":  # Home win
-                goal_diff = home_goals - away_goals
-                new_home_elo, new_away_elo = update_elo(current_home_elo, current_away_elo, goal_diff, False, late_season)
-            elif result == "A":  # Away win
-                goal_diff = away_goals - home_goals
-                new_away_elo, new_home_elo = update_elo(current_away_elo, current_home_elo, goal_diff, True, late_season)
-            else:  # Draw
-                expected_home = get_expected_score(current_home_elo, current_away_elo)
-                change_home = K_FACTOR * (0.5 - expected_home)
-                new_home_elo = current_home_elo + change_home
-                new_away_elo = current_away_elo - change_home
+            # Check if the match is a derby
+            derby = is_derby_match(home, away)
             
-            # Save updated ELOs
-            team_history[home][season].append((i+1, new_home_elo))
-            team_history[away][season].append((i+1, new_away_elo))
+            # Update ELO with the derby flag
+            new_home_elo, new_away_elo = update_elo(current_home_elo, current_away_elo, home_goals, away_goals, late_season, derby)
             
-            # Store detailed match history
+            # Save updated ELOs in team history
+            team_history[home][season].append((i + 1, new_home_elo))
+            team_history[away][season].append((i + 1, new_away_elo))
+            
+            # Record detailed match history for debugging and analysis
             match_history.append({
                 'Season': season,
-                'Date': match_date,  # Ensure this is in datetime format
+                'Date': match_date,
                 'HomeTeam': home,
                 'AwayTeam': away,
                 'HomeGoals': home_goals,
                 'AwayGoals': away_goals,
-                'Result': result,
+                'Result': match["FTR"],
                 'HomeElo_Before': current_home_elo,
                 'AwayElo_Before': current_away_elo,
                 'HomeElo_After': new_home_elo,
@@ -388,9 +695,8 @@ def calculate_elo(df):
                 'HomeElo_Change': new_home_elo - current_home_elo,
                 'AwayElo_Change': new_away_elo - current_away_elo
             })
-
         
-        # Store final ELOs for next season
+        # Finalize season ELOs for each team for carry-over
         for team in teams_in_season:
             final_elo = team_history[team][season][-1][1]
             if team not in season_final_elo:
@@ -399,6 +705,7 @@ def calculate_elo(df):
             previous_season_elo[team] = final_elo
 
     return team_history, season_final_elo, pd.DataFrame(match_history), team_seasons
+
 
 # Get end-of-season rankings
 def get_season_overview(season_final_elo, season):
@@ -485,21 +792,56 @@ def create_sidebar(team_history, seasons):
 
 
 # Create a modern dashboard header
-def create_header():
-    """Creates a structured and aligned header with the Premier League logo and title."""
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        logo_path = "Assets/premier_league_logo.png"
-        if os.path.exists(logo_path):
-            st.image(logo_path, width=550)  # Adjusted for better balance
-    with col2:
-        st.markdown(
-            f"""
-            <div style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
-                <h1 style="color:#FFFFFF; margin-bottom: 5px;">ELO Tracker</h1>
-            </div>
-            """, unsafe_allow_html=True
-        )
+def create_header(): 
+    st.markdown("""
+    <style>
+    .shine {
+    font-size: 5em;
+    font-weight: 900;
+    color: #123524;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    background: #222 -webkit-gradient(
+        linear,
+        left top,
+        right top,
+        from(#222),
+        to(#222),
+        color-stop(0.5, #fff)
+        ) 0 0 no-repeat;
+    background-image: -webkit-linear-gradient(
+        -40deg,
+        transparent 0%,
+        transparent 40%,
+        #fff 50%,
+        transparent 60%,
+        transparent 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-background-size: 100px;
+    -webkit-animation: zezzz;
+    -webkit-animation-duration: 3s;
+    -webkit-animation-iteration-count: infinite;
+    }
+    @-webkit-keyframes zezzz {
+    0%,
+    10% {
+        background-position: -200px;
+    }
+    20% {
+        background-position: top left;
+    }
+    100% {
+        background-position: 200px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    lt = st.empty()
+    
+    lt.html("""
+    <div class="shine">HISTO</div>
+            """)
+
 
 def calculate_team_stats(team, match_history):
     team_matches = match_history[(match_history["HomeTeam"] == team) | (match_history["AwayTeam"] == team)]
@@ -545,13 +887,15 @@ def calculate_team_stats(team, match_history):
         opp_total = opp_matches.shape[0]
         win_rate = round((opp_wins / opp_total) * 100, 1) if opp_total > 0 else 0
 
-        if opp_total >= 2:  # Ensure at least  matches played
+        if opp_total >= 2:  # Ensure at least 2 matches played
             opponent_stats.append({"Opponent": opp, "Matches Played": opp_total, "Win Rate": win_rate})
 
     opponent_stats_df = pd.DataFrame(opponent_stats)
     best_opponent = opponent_stats_df.loc[opponent_stats_df["Win Rate"].idxmax()] if not opponent_stats_df.empty else None
     worst_opponent = opponent_stats_df.loc[opponent_stats_df["Win Rate"].idxmin()] if not opponent_stats_df.empty else None
     most_played_opponent = opponent_stats_df.loc[opponent_stats_df["Matches Played"].idxmax()] if not opponent_stats_df.empty else None
+    worst_opponents = opponent_stats_df.sort_values("Win Rate").head(5).to_dict(orient="records")
+
 
     return {
         "higher_win_pct": higher_win_pct,
@@ -562,7 +906,8 @@ def calculate_team_stats(team, match_history):
         "lower_loss_pct": lower_loss_pct,
         "best_opponent": best_opponent,
         "worst_opponent": worst_opponent,
-        "most_played_opponent": most_played_opponent
+        "most_played_opponent": most_played_opponent,
+        'worst_opponents': worst_opponents
     }
 
 # Display team categories in card format
@@ -597,7 +942,6 @@ def display_category_cards(elite, contenders, mid_table, relegation):
 
 
 
-
 # Enhanced team analysis view
 def show_team_analysis(team_history, settings, match_history):
     team = settings["team"]
@@ -611,7 +955,6 @@ def show_team_analysis(team_history, settings, match_history):
 
     # Layout: Display team logo next to team name with a styled background
     col1, col2 = st.columns([1, 4])
-
     with col1:
         team_logo_path = f"Assets/team_logos/{team}.png"
         if os.path.exists(team_logo_path):
@@ -624,16 +967,14 @@ def show_team_analysis(team_history, settings, match_history):
         season = settings["season"]
         st.markdown(f"<h4 style='color:#FFFFFF;'>ELO Rating in {season}</h4>", unsafe_allow_html=True)
 
-        fig = plot_elo_progression(team, season, team_history, match_history)  # Step chart function
-
+        # Use the new timeline function instead of the step chart
+        fig = plot_team_elo_timeline(team, season, team_history, match_history)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
-
     else:
         seasons = settings["seasons"]
         st.markdown(f"<h4 style='color:#FFFFFF;'>ELO Comparison Across Seasons</h4>", unsafe_allow_html=True)
-
-        # Multi-Season Graph
+        # Multi-Season Graph (existing code)
         fig = go.Figure()
         for season in seasons:
             if season in team_history[team]:
@@ -645,7 +986,6 @@ def show_team_analysis(team_history, settings, match_history):
                     name=season,
                     line=dict(width=2)
                 ))
-
         fig.update_layout(
             xaxis_title="Match Number",
             yaxis_title="ELO Rating",
@@ -653,7 +993,6 @@ def show_team_analysis(team_history, settings, match_history):
             legend_title="Season",
             template="plotly_white"
         )
-
         st.plotly_chart(fig, use_container_width=True)
 
     # Key Matches (Only if not multi-season)
@@ -663,7 +1002,6 @@ def show_team_analysis(team_history, settings, match_history):
             <h3 style="color:#FFFFFF;">Key Matches</h3>
             """, unsafe_allow_html=True
         )
-
         season_data = team_history[team][season]
         elos = [elo for _, elo in season_data]
 
@@ -678,7 +1016,7 @@ def show_team_analysis(team_history, settings, match_history):
             biggest_loss_idx = elo_changes.index(min(elo_changes)) + 1
 
             # Find the corresponding match details
-            biggest_gain_match = team_matches.iloc[biggest_gain_idx - 1]  # Get match details
+            biggest_gain_match = team_matches.iloc[biggest_gain_idx - 1]
             biggest_loss_match = team_matches.iloc[biggest_loss_idx - 1]
 
             # Determine opponent, match location, and score
@@ -708,7 +1046,6 @@ def show_team_analysis(team_history, settings, match_history):
                 <p style="color:#39FF14; font-size:20px; font-weight:bold;">ELO Change: +{round(elos[biggest_gain_idx] - elos[biggest_gain_idx-1], 1)}</p>
             </div>
             """, unsafe_allow_html=True)
-
             with col2:
                 st.markdown(f"""
             <div style="
@@ -775,6 +1112,8 @@ def show_season_overview(season_final_elo, settings):
         </div>
         """, unsafe_allow_html=True)
 
+    fig = plot_season_overview_bubble(rankings, season)
+    st.plotly_chart(fig, use_container_width=True)
 
     # Static bar chart (Final ELO)
     fig = px.bar(
@@ -804,9 +1143,12 @@ def show_season_overview(season_final_elo, settings):
 def show_club_dashboard(match_history, settings):
     st.header(f"📊 {settings['team']} Performance Dashboard")
 
+    
+
     team = settings["team"]
     team_matches = match_history[(match_history["HomeTeam"] == team) | (match_history["AwayTeam"] == team)]
     team_logo_path = f"Assets/team_logos/{team}.png"
+    
     
     # Display team logo
     if os.path.exists(team_logo_path):
@@ -835,8 +1177,130 @@ def show_club_dashboard(match_history, settings):
     st.progress(stats["lower_loss_pct"] / 100)
     st.write(f"🔴 Loss Rate: **{stats['lower_loss_pct']}%**")
     
+    st.markdown("## Worst Enemies😈", unsafe_allow_html=True)
+    
+    # Generate the cards inside the scrollable container
+    best_logo = get_team_logo_path(stats["best_opponent"]["Opponent"])
+    best_logo_base64 = encode_image(best_logo)
+
+    worst_logo = get_team_logo_path(stats["worst_opponent"]["Opponent"])
+    worst_logo_base64 = encode_image(worst_logo)
+
+    most_played_logo = get_team_logo_path(stats["most_played_opponent"]["Opponent"])
+    most_played_logo_base64 = encode_image(most_played_logo)
+
+    st.markdown("""
+        <style>
+        .flip-card {
+        background-color: transparent;
+        width: 190px;
+        height: 254px;
+        perspective: 1000px;
+        font-family: sans-serif;
+        }
+
+        .title {
+        font-size: 1.5em;
+        font-weight: 900;
+        text-align: center;
+        margin: 0;
+        }
+
+        .flip-card-inner {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        text-align: center;
+        transition: transform 0.8s;
+        transform-style: preserve-3d;
+        }
+
+        .flip-card:hover .flip-card-inner {
+        transform: rotateY(180deg);
+        }
+
+        .flip-card-front, .flip-card-back {
+        box-shadow: 0 8px 14px 0 rgba(0,0,0,0.2);
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+        border: 1px #000000 solid;
+        border-radius: 1rem;
+        }
+
+        .flip-card-front {
+        background: black;
+        color: black;
+        }
+
+        .flip-card-back {
+        background: linear-gradient(180deg, #000000 0%, #123524 40%, #123524 60%, #000000 100%);
+        color: white;
+        transform: rotateY(180deg);
+        }
+        
+        .shine-logo {
+            font-size: 2.5em;
+            font-weight: 900;
+            position: absolute;
+            left: 25px;
+            top: 85px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            background: -webkit-linear-gradient(-40deg, #0f2b1a, #123524, #156a40);
+            background-size: 400% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: shineAnim 3s infinite;
+        }
+
+        @keyframes shineAnim {
+            0% { background-position: -200px; }
+            50% { background-position: 200px; }
+            100% { background-position: -200px; }
+        }
+        </style>
+
+    """, unsafe_allow_html=True)
+    
+    worst_teams = stats["worst_opponents"]  # list of dicts
+
+    html_cards = '<div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:center;">'
+    for opp in worst_teams:
+        logo_path = get_team_logo_path(opp['Opponent'])
+        logo_base64 = encode_image(logo_path)
+    
+        bg_path = get_team_background_path(opp['Opponent'])
+        bg_base64 = encode_image(bg_path)
+        
+        bb_base64 = encode_image("Assets\cool-card.jpg")
+        
+        html_cards += f"""
+        <div class="flip-card">
+            <div class="flip-card-inner">
+                <div class="flip-card-front" style="background: url('data:image/jpeg;base64,{bb_base64}') no-repeat center center; background-size: cover;">
+                    <div class="shine-logo">HISTO</div>
+                </div>
+                <div class="flip-card-back" style="background: url('data:image/png;base64,{bg_base64}') no-repeat center center; background-size: cover;">
+                    <img src="data:image/png;base64,{logo_base64}" alt="Opponent Logo" style="width: 60px; border-radius: 5px; margin: 0 auto;">
+                    <p class="title" style="font-size:120%;">{opp['Opponent']}</p>
+                    <p style="font-size:100%;">Win Rate: <b>{opp['Win Rate']}%</b></p>
+                </div>
+            </div>
+        </div>
+        """
+    html_cards += '</div>'
+    st.html(html_cards)
+
+
+    
     # Horizontal Scrolling Cards for Opponent-Based Performance
     st.subheader("🆚 Opponent-Based Performance")
+    
 
     # Add custom HTML and CSS for horizontal scrolling
     st.markdown("""
@@ -849,8 +1313,8 @@ def show_club_dashboard(match_history, settings):
         flex-wrap: nowrap;
     }
     .card {
-        width: 200px;
-        background-color: #003366;
+        width: 430px;
+        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
         padding: 15px;
         border-radius: 10px;
         text-align: center;
@@ -869,18 +1333,8 @@ def show_club_dashboard(match_history, settings):
     }
     </style>
     """, unsafe_allow_html=True)
-
-    # Generate the cards inside the scrollable container
-    best_logo = get_team_logo_path(stats["best_opponent"]["Opponent"])
-    best_logo_base64 = encode_image(best_logo)
-
-    worst_logo = get_team_logo_path(stats["worst_opponent"]["Opponent"])
-    worst_logo_base64 = encode_image(worst_logo)
-
-    most_played_logo = get_team_logo_path(stats["most_played_opponent"]["Opponent"])
-    most_played_logo_base64 = encode_image(most_played_logo)
-
-    # Scrollable cards HTML
+    
+    
     st.markdown(f"""
     <div class="scroll-container">
         <div class="card">
@@ -901,6 +1355,9 @@ def show_club_dashboard(match_history, settings):
             <p>{stats['most_played_opponent']['Opponent']}</p>
             <p>Matches Played: <b>{stats['most_played_opponent']['Matches Played']}</b></p>
         </div>
+        
+       
+        
     </div>
     """, unsafe_allow_html=True)
 
@@ -971,40 +1428,144 @@ def show_about():
 
 # Main function with improved structure
 def main():
+    import streamlit as st
+    import streamlit.components.v1 as components
+    
     # Set up the page
     setup_page()
     
     # Create header
     create_header()
+    loader_placeholder = st.empty()
+    lp = st.empty()
+    loader_placeholder.markdown("""
+    <style>
+    .loader-card {
+        --bg-color: #3a125b;
+        background: linear-gradient(135deg, #123524, #284431);
+        padding: 1rem 2rem;
+        border-radius: 1.25rem;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
+        width: 100%;
+        max-width: 300px;
+    }
+    .loader {
+        color: rgb(124, 124, 124);
+        font-family: "Poppins", sans-serif;
+        font-weight: 500;
+        font-size: 25px;
+        box-sizing: content-box;
+        height: 50px;
+        padding: 10px 10px;
+        display: flex;
+        border-radius: 8px;
+    }
+    .words {
+        overflow: hidden;
+        position: relative;
+        height: 40px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    .words::after {
+        content: "";
+        position: absolute;
+        background: var(--bg-color)
+        inset: 0;
+        z-index: 20;
+    }
+    .word {
+        display: block;
+        height: 100%;
+        padding-left: 5px;
+        color: #FFFFFF;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        animation: spin_4991 7s infinite ease-in-out;
+    }
+    @keyframes spin_4991 {
+        0%   { transform: translateY(0%); }  /* scroll to ELO */
+        25%  { transform: translateY(-100%); }  /* scroll to Teams */
+        50%  { transform: translateY(-200%); }  /* scroll to Rivalries */
+        75%  { transform: translateY(-300%); }  /* scroll to Wins */
+        100%  { transform: translateY(-400%); }  /* scroll to Losses */
+    }
+
+
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Show loader
+    lp.html("""
+    <div class="loader-card">
+    <div class="loader">
+        <p style="color:#C0C0C0; font-size: 25px; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);">Loading</p>
+        <div class="words">
+        <span class="word">ELO</span>
+        <span class="word">Legends</span>
+        <span class="word">Legacy</span>
+        <span class="word">Glory</span>
+        <span class="word">Drama</span>
+        </div>
+    </div>
+    </div>
+    """)
     
-    # Load data
-    with st.spinner("Loading data..."):
-        df = load_data()
+    import time
+    time.sleep(5)    
+    df = load_data()
         
-        if df.empty:
-            st.error("No data available. Please check the data file.")
-            return
+    if df.empty:
+        st.error("No data available. Please check the data file.")
+        return
         
-        # Calculate ELO
-        with st.spinner("Calculating ELO ratings..."):
-            team_history, season_final_elo, match_history, team_seasons = calculate_elo(df)
-        
-        # Get unique seasons
-        seasons = sorted(df["Season"].unique())
+    team_history, season_final_elo, match_history, team_seasons = calculate_elo(df)
     
-    # Create sidebar and get navigation choices
-    mode, settings = create_sidebar(team_history, seasons)
+    loader_placeholder.empty()
+    lp.empty()
+        
+    # Get unique seasons
+    seasons = sorted(df["Season"].unique())
+        
+        
     
-    # Display the appropriate view based on mode
-    if mode == "Team Analysis":
+     # Initialize active tab in session state if not already set
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = "Team Analysis"
+
+    # Use a radio button for navigation so the selected tab persists
+    tab_options = ["Team Analysis", "Season Overview", "Club Dashboard", "About"]
+    selected_tab = st.radio("Navigation", tab_options, index=tab_options.index(st.session_state.active_tab))
+    st.session_state.active_tab = selected_tab
+    
+    if selected_tab == "Team Analysis":
+        st.subheader("Team Analysis")
+        selected_team = st.selectbox("Select a Team", sorted(team_history.keys()), key="team_analysis_team")
+        multi_season = st.checkbox("Compare Multiple Seasons", value=False)
+        if multi_season:
+            available_seasons = sorted(team_history.get(selected_team, {}).keys())
+            selected_seasons = st.multiselect("Select Seasons", available_seasons,
+                                              default=available_seasons[-2:] if len(available_seasons) >= 2 else available_seasons)
+            settings = {"team": selected_team, "multi_season": True, "seasons": selected_seasons}
+        else:
+            available_seasons = sorted(team_history.get(selected_team, {}).keys())
+            selected_season = st.selectbox("Select a Season", available_seasons)
+            settings = {"team": selected_team, "multi_season": False, "season": selected_season}
         show_team_analysis(team_history, settings, match_history)
-    elif mode == "Season Overview":
+
+    elif selected_tab == "Season Overview":
+        st.subheader("Season Overview")
+        selected_season = st.selectbox("Select Season", seasons)
+        display_mode = st.radio("Display Mode", ["Chart", "Table", "Both"], index=2)
+        settings = {"season": selected_season, "display_mode": display_mode}
         show_season_overview(season_final_elo, settings)
-    elif mode == "Club Dashboard":
+
+    elif selected_tab == "Club Dashboard":
+        st.subheader("Club Dashboard")
+        selected_team = st.selectbox("Select a Team", sorted(team_history.keys()), key="club_dashboard_team")
+        settings = {"team": selected_team}
         show_club_dashboard(match_history, settings)
-    else:  # About
+
+    elif selected_tab == "About":
         show_about()
-    
     # Add footer with version info
     st.markdown("""
     <div style="text-align: center; margin-top: 30px; padding: 10px; color: #666; font-size: 0.8em;">
