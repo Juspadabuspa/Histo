@@ -9,6 +9,7 @@ from config import logger
 import numpy as np
 import calendar
 import base64
+from utils import render_stat_card, render_team_category_card, render_opponent_performance, load_stylesheet, render_key_moments, generate_youtube_search_link 
 
 # Constants with tunable parameters
 K_BASE = 40          # Base K-factor
@@ -20,6 +21,8 @@ LATE_SEASON_WEIGHT = 1.2
 INITIAL_ELO = 1000
 INACTIVITY_DECAY = 0.95  # Decay factor for inactive teams
 debug_log_path = os.path.join("C:", "Users", "3fold", "Documents", "Prem ELO", "debug_log.txt")
+
+
 
 st.set_page_config(
         page_title="Histo - ELO Tracker",
@@ -41,46 +44,6 @@ def encode_image(image_path):
             return base64.b64encode(img_file.read()).decode("utf-8")
     except FileNotFoundError:
         return ""
-# Improved CSS with accessibility considerations
-def inject_css():
-    st.markdown("""
-    <style>
-    /* Team cards with fixed size and left-aligned logo */
-    /* Team cards with fixed size and left-aligned logo */
-    .team-card {
-        width: 200px;  /* Fixed width for the cards */
-        height: 100px;  /* Fixed height for the cards */
-        padding: 10px;
-        border-radius: 5px;
-        margin: 5px;
-        font-weight: 500;
-        text-align: left;  /* Align text to the left */
-        transition: transform 0.2s;
-        display: flex;
-        align-items: center;  /* Vertically center the content */
-    }
-
-    /* Display logo (image) on the left side */
-    .team-card img {
-        width: 50px;  /* Fixed size for the logo */
-        height: 50px;  /* Fixed size for the logo */
-        object-fit: contain;
-        margin-right: 10px;  /* Space between the image and text */
-    }
-
-    /* Styling for the text or details next to the logo */
-    .team-card .team-info {
-        flex: 1;  /* Make sure the text takes the remaining space */
-        font-size: 14px;
-    }
-
-    /* Hover effect for the card */
-    .team-card:hover {
-        transform: scale(1.05);
-    }
-
-    </style>
-    """, unsafe_allow_html=True)
 
     
 # Define team colours
@@ -486,6 +449,7 @@ def plot_elo_progression(team, season, team_history, match_history):
     return None
 
 
+
 def get_team_category(rank, total_teams):
     """Classify teams based on their final ranking"""
     if rank <= 4:
@@ -623,7 +587,7 @@ def apply_inactivity_decay(all_teams_elo, active_teams, weeks_inactive=None):
 
 
 
-# Calculate ELO for every match and season
+@st.cache_data
 def calculate_elo(df):
     logger.debug("calculate_elo function called")
     
@@ -945,30 +909,38 @@ def display_category_cards(elite, contenders, mid_table, relegation):
 # Enhanced team analysis view
 def show_team_analysis(team_history, settings, match_history):
     team = settings["team"]
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
     multi_season = settings["multi_season"]
 
-    st.markdown(
-        f"""
-        <h2 style="color:#FFFFFF;">{team} ELO Performance</h2>
-        """, unsafe_allow_html=True
-    )
+    st.markdown(f"<h2 style='text-align:center; color:#FFFFFF;'>{team} ELO Performance</h2>", unsafe_allow_html=True)
 
-    # Layout: Display team logo next to team name with a styled background
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        team_logo_path = f"Assets/team_logos/{team}.png"
-        if os.path.exists(team_logo_path):
-            st.image(team_logo_path, width=150)
-        else:
-            st.warning(f"Image not found: {team_logo_path}")
+    team_logo_path = f"Assets/team_logos/{team}.png"
+    if os.path.exists(team_logo_path):
+        imzy = encode_image(team_logo_path)
+        st.markdown(f"""
+        <div style='text-align: center;'>
+            <img src="data:image/png;base64,{imzy}" style="width: 150px;">
+        </div>
+    """, unsafe_allow_html=True)
+    else:
+        st.warning(f"Image not found: {team_logo_path}")
 
     # ELO Progression Graph
     if not multi_season:
         season = settings["season"]
-        st.markdown(f"<h4 style='color:#FFFFFF;'>ELO Rating in {season}</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='text-align:center; color:#FFFFFF;'>ELO Rating in {season}</h4>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
         # Use the new timeline function instead of the step chart
         fig = plot_team_elo_timeline(team, season, team_history, match_history)
+        
+        fig.update_layout(
+        template="plotly_dark",
+        plot_bgcolor="#1E1E1E",
+        paper_bgcolor="#1E1E1E",
+        font=dict(family="Roboto, sans-serif", size=14, color="#FFFFFF")
+        )
+        
         if fig:
             st.plotly_chart(fig, use_container_width=True)
     else:
@@ -993,15 +965,18 @@ def show_team_analysis(team_history, settings, match_history):
             legend_title="Season",
             template="plotly_white"
         )
+        
+        fig.update_layout(
+        template="plotly_dark",
+        plot_bgcolor="#1E1E1E",
+        paper_bgcolor="#1E1E1E",
+        font=dict(family="Roboto, sans-serif", size=14, color="#FFFFFF")
+        )
+
         st.plotly_chart(fig, use_container_width=True)
 
     # Key Matches (Only if not multi-season)
     if not multi_season:
-        st.markdown(
-            f"""
-            <h3 style="color:#FFFFFF;">Key Matches</h3>
-            """, unsafe_allow_html=True
-        )
         season_data = team_history[team][season]
         elos = [elo for _, elo in season_data]
 
@@ -1021,51 +996,79 @@ def show_team_analysis(team_history, settings, match_history):
 
             # Determine opponent, match location, and score
             gain_opponent = biggest_gain_match["AwayTeam"] if biggest_gain_match["HomeTeam"] == team else biggest_gain_match["HomeTeam"]
-            gain_location = "Home vs" if biggest_gain_match["HomeTeam"] == team else "Away at"
+            gain_location = "Home" if biggest_gain_match["HomeTeam"] == team else "Away"
             gain_date = biggest_gain_match["Date"].strftime('%d %b %Y')
             gain_score = f"{biggest_gain_match['HomeGoals']} - {biggest_gain_match['AwayGoals']}"
 
             loss_opponent = biggest_loss_match["AwayTeam"] if biggest_loss_match["HomeTeam"] == team else biggest_loss_match["HomeTeam"]
-            loss_location = "Home vs" if biggest_loss_match["HomeTeam"] == team else "Away at"
+            loss_location = "Home" if biggest_loss_match["HomeTeam"] == team else "Away"
             loss_date = biggest_loss_match["Date"].strftime('%d %b %Y')
             loss_score = f"{biggest_loss_match['HomeGoals']} - {biggest_loss_match['AwayGoals']}"
+            
+            draws = team_matches[team_matches["Result"] == "D"]
+            gain_elo_change = elo_changes[biggest_gain_idx - 1]
+            loss_elo_change = elo_changes[biggest_loss_idx - 1]
 
-            # Display Key Matches in a styled format
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"""
-            <div style="
-                background: linear-gradient(135deg, #065F46, #0F766E);
-                padding: 20px; 
-                border-radius: 12px; 
-                box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
-                text-align:center;">
-                <h4 style="color:#39FF14; margin-bottom:10px;">Biggest ELO Gain</h4>
-                <p style="color:#FFFFFF; font-size:16px;"><b>{gain_location} {gain_opponent} ({gain_date})</b></p>
-                <p style="color:#FFFFFF; font-size:18px;">Final Score: <b>{gain_score}</b></p>
-                <p style="color:#39FF14; font-size:20px; font-weight:bold;">ELO Change: +{round(elos[biggest_gain_idx] - elos[biggest_gain_idx-1], 1)}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            with col2:
-                st.markdown(f"""
-            <div style="
-                background: linear-gradient(135deg, #7F1D1D, #B91C1C);
-                padding: 20px; 
-                border-radius: 12px; 
-                box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
-                text-align:center;">
-                <h4 style="color:#FF6B6B; margin-bottom:10px;">Biggest ELO Loss</h4>
-                <p style="color:#FFFFFF; font-size:16px;"><b>{loss_location} {loss_opponent} ({loss_date})</b></p>
-                <p style="color:#FFFFFF; font-size:18px;">Final Score: <b>{loss_score}</b></p>
-                <p style="color:#FF6B6B; font-size:20px; font-weight:bold;">ELO Change: {round(elos[biggest_loss_idx] - elos[biggest_loss_idx-1], 1)}</p>
-            </div>
-            """, unsafe_allow_html=True)
+            if not draws.empty:
+                # Determine opponent and their pre-match ELO
+                draws["Opponent"] = draws.apply(lambda row: row["AwayTeam"] if row["HomeTeam"] == team else row["HomeTeam"], axis=1)
+                draws["OpponentElo"] = draws.apply(lambda row: row["AwayElo_Before"] if row["HomeTeam"] == team else row["HomeElo_Before"], axis=1)
+                
+                # Find draw vs strongest opponent (highest ELO)
+                strongest_draw = draws.loc[draws["OpponentElo"].idxmax()]
+                
+                draw_opponent = strongest_draw["Opponent"]
+                draw_score = f"{strongest_draw['HomeGoals']} - {strongest_draw['AwayGoals']}"
+                draw_location = "Home" if strongest_draw["HomeTeam"] == team else "Away"
+                draw_date = strongest_draw["Date"].strftime('%d %b %Y')
+                draw_logo = get_team_logo_path(draw_opponent)
+            else:
+                draw_opponent = "N/A"
+                draw_score = "0 - 0"
+                draw_location = "N/A"
+                draw_date = "N/A"
+                draw_logo = None
+
+            gain_link = generate_youtube_search_link(team, gain_opponent, gain_score, gain_date)
+            loss_link = generate_youtube_search_link(team, loss_opponent, loss_score, loss_date)
+            draw_link = generate_youtube_search_link(team, draw_opponent, draw_score, draw_date)  
+
+            render_key_moments(
+                gain={
+                    "Opponent": gain_opponent,
+                    "Score": gain_score,
+                    "Location": gain_location,
+                    "Date": gain_date,
+                    "Logo": get_team_logo_path(gain_opponent),
+                    "ELO": elo_changes[biggest_gain_idx - 1],
+                    "Link": gain_link
+                },
+                loss={
+                    "Opponent": loss_opponent,
+                    "Score": loss_score,
+                    "Location": loss_location,
+                    "Date": loss_date,
+                    "Logo": get_team_logo_path(loss_opponent),
+                    "ELO": elo_changes[biggest_loss_idx - 1],
+                    "Link": loss_link
+                },
+                draw={
+                    "Opponent": draw_opponent,
+                    "Score": draw_score,
+                    "Location": draw_location,
+                    "Date": draw_date,
+                    "Logo": get_team_logo_path(draw_opponent),
+                    "ELO": 0,
+                    "Link": draw_link
+                }
+            )
+
+
+
 
 
 def show_season_overview(season_final_elo, settings):
     season = settings["season"]
-
-    st.header(f"🏆 Final ELO Rankings: {season}")
 
     # Get rankings and team categories
     elite_teams, contender_teams, mid_table_teams, relegation_teams, rankings = get_season_overview(season_final_elo, season)
@@ -1076,44 +1079,41 @@ def show_season_overview(season_final_elo, settings):
 
     # Display ELO-based category heading
     st.subheader("🔢 Team Categories Based on ELO Rankings")
+    cols = st.columns([1, 1, 1, 1]) if st.session_state.get("screen_width", 1000) > 1000 else st.columns(2)
+    
+    
+    screen_width = st.session_state.get("screen_width", 1000)
+    num_cols = 4 if screen_width > 1000 else 2
+    cols = st.columns(num_cols)
 
-    # Display categorized teams as gradient cards
-    col1, col2, col3, col4 = st.columns(4)
 
-    with col1:
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #FFD700, #FFC107); padding: 20px; border-radius: 12px; text-align:center; height: 200px; display: flex; flex-direction: column; justify-content: center;">
-            <h4 style="color:#000000;">🥇 Elite Teams</h4>
-            <p style="color: black; font-size: 14px;">{', '.join(elite_teams) if elite_teams else 'No teams'}</p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Define categories and their content
+    categories = [
+    ("🥇 Elite Teams", elite_teams, "gold-red"),
+    ("💪 Contender Teams", contender_teams, "blue"),
+    ("⚖️ Mid-Table Teams", mid_table_teams, "gray"),
+    ("📉 Relegation Teams", relegation_teams, "red")
+    ]
 
-    with col2:
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #1E90FF, #4682B4); padding: 20px; border-radius: 12px; text-align:center; height: 200px; display: flex; flex-direction: column; justify-content: center;">
-            <h4 style="color:#FFFFFF;">💪 Contender Teams</h4>
-            <p style="color: white; font-size: 14px;">{', '.join(contender_teams) if contender_teams else 'No teams'}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #31b6b0, #20B2AA); padding: 20px; border-radius: 12px; text-align:center; height: 200px; display: flex; flex-direction: column; justify-content: center;">
-            <h4 style="color:#FFFFFF;">⚖️ Mid-Table Teams</h4>
-            <p style="color: white; font-size: 12px;">{', '.join(mid_table_teams) if mid_table_teams else 'No teams'}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #FF4C4C, #B22222); padding: 20px; border-radius: 12px; text-align:center; height: 200px; display: flex; flex-direction: column; justify-content: center;">
-            <h4 style="color:#FFFFFF;">📉 Relegation Teams</h4>
-            <p style="color: white; font-size: 14px;">{', '.join(relegation_teams) if relegation_teams else 'No teams'}</p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Display each category in a responsive layout
+    for i, (label, teams, colour) in enumerate(categories):
+        with cols[i % num_cols]:
+            render_team_category_card(label, teams, gradient=colour)
+            
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
 
     fig = plot_season_overview_bubble(rankings, season)
+    
+    fig.update_layout(
+        template="plotly_dark",
+        plot_bgcolor="#1E1E1E",
+        paper_bgcolor="#1E1E1E",
+        font=dict(family="Roboto, sans-serif", size=14, color="#FFFFFF")
+    )
+
     st.plotly_chart(fig, use_container_width=True)
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+
 
     # Static bar chart (Final ELO)
     fig = px.bar(
@@ -1134,6 +1134,14 @@ def show_season_overview(season_final_elo, settings):
         template="plotly_white",
         yaxis=dict(categoryorder="total ascending")  # Keep highest ELO at the top
     )
+    
+    fig.update_layout(
+        template="plotly_dark",
+        plot_bgcolor="#1E1E1E",
+        paper_bgcolor="#1E1E1E",
+        font=dict(family="Roboto, sans-serif", size=14, color="#FFFFFF")
+    )
+
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -1179,251 +1187,125 @@ def show_club_dashboard(match_history, settings):
     
     st.markdown("## Worst Enemies😈", unsafe_allow_html=True)
     
-    # Generate the cards inside the scrollable container
-    best_logo = get_team_logo_path(stats["best_opponent"]["Opponent"])
-    best_logo_base64 = encode_image(best_logo)
-
-    worst_logo = get_team_logo_path(stats["worst_opponent"]["Opponent"])
-    worst_logo_base64 = encode_image(worst_logo)
-
-    most_played_logo = get_team_logo_path(stats["most_played_opponent"]["Opponent"])
-    most_played_logo_base64 = encode_image(most_played_logo)
-
-    st.markdown("""
-        <style>
-        .flip-card {
-        background-color: transparent;
-        width: 190px;
-        height: 254px;
-        perspective: 1000px;
-        font-family: sans-serif;
-        }
-
-        .title {
-        font-size: 1.5em;
-        font-weight: 900;
-        text-align: center;
-        margin: 0;
-        }
-
-        .flip-card-inner {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        text-align: center;
-        transition: transform 0.8s;
-        transform-style: preserve-3d;
-        }
-
-        .flip-card:hover .flip-card-inner {
-        transform: rotateY(180deg);
-        }
-
-        .flip-card-front, .flip-card-back {
-        box-shadow: 0 8px 14px 0 rgba(0,0,0,0.2);
-        position: absolute;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-        -webkit-backface-visibility: hidden;
-        backface-visibility: hidden;
-        border: 1px #000000 solid;
-        border-radius: 1rem;
-        }
-
-        .flip-card-front {
-        background: black;
-        color: black;
-        }
-
-        .flip-card-back {
-        background: linear-gradient(180deg, #000000 0%, #123524 40%, #123524 60%, #000000 100%);
-        color: white;
-        transform: rotateY(180deg);
-        }
-        
-        .shine-logo {
-            font-size: 2.5em;
-            font-weight: 900;
-            position: absolute;
-            left: 25px;
-            top: 85px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            background: -webkit-linear-gradient(-40deg, #0f2b1a, #123524, #156a40);
-            background-size: 400% auto;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: shineAnim 3s infinite;
-        }
-
-        @keyframes shineAnim {
-            0% { background-position: -200px; }
-            50% { background-position: 200px; }
-            100% { background-position: -200px; }
-        }
-        </style>
-
-    """, unsafe_allow_html=True)
-    
     worst_teams = stats["worst_opponents"]  # list of dicts
-
-    html_cards = '<div style="display:flex; flex-wrap:wrap; gap:20px; justify-content:center;">'
-    for opp in worst_teams:
-        logo_path = get_team_logo_path(opp['Opponent'])
-        logo_base64 = encode_image(logo_path)
+    cols = st.columns(len(worst_teams))
+    for i, opp in enumerate(worst_teams):
+        with cols[i]:
+            render_stat_card(
+                title=opp["Opponent"],
+                subtitle=f"Win Rate: {opp['Win Rate']}%",
+                gradient="red"
+            )
     
-        bg_path = get_team_background_path(opp['Opponent'])
-        bg_base64 = encode_image(bg_path)
-        
-        bb_base64 = encode_image("Assets\cool-card.jpg")
-        
-        html_cards += f"""
-        <div class="flip-card">
-            <div class="flip-card-inner">
-                <div class="flip-card-front" style="background: url('data:image/jpeg;base64,{bb_base64}') no-repeat center center; background-size: cover;">
-                    <div class="shine-logo">HISTO</div>
-                </div>
-                <div class="flip-card-back" style="background: url('data:image/png;base64,{bg_base64}') no-repeat center center; background-size: cover;">
-                    <img src="data:image/png;base64,{logo_base64}" alt="Opponent Logo" style="width: 60px; border-radius: 5px; margin: 0 auto;">
-                    <p class="title" style="font-size:120%;">{opp['Opponent']}</p>
-                    <p style="font-size:100%;">Win Rate: <b>{opp['Win Rate']}%</b></p>
-                </div>
-            </div>
-        </div>
-        """
-    html_cards += '</div>'
-    st.html(html_cards)
-
-
     
     # Horizontal Scrolling Cards for Opponent-Based Performance
     st.subheader("🆚 Opponent-Based Performance")
     
+    render_opponent_performance(
+        best_opp=stats["best_opponent"]["Opponent"],
+        best_record=f"{stats['best_opponent']['Win Rate']}% Win Rate",
+        worst_opp=stats["worst_opponent"]["Opponent"],
+        worst_record=f"{stats['worst_opponent']['Win Rate']}% Win Rate"
+    )
 
-    # Add custom HTML and CSS for horizontal scrolling
+    render_stat_card(
+        title="🔁 Most Played Opponent",
+        subtitle=f"{stats['most_played_opponent']['Opponent']} ({stats['most_played_opponent']['Win Rate']}% Win Rate)",
+        gradient="gray"
+    )
+
+def show_about():
     st.markdown("""
     <style>
-    .scroll-container {
-        display: flex;
-        overflow-x: auto;
-        gap: 15px;
-        padding: 10px;
-        flex-wrap: nowrap;
-    }
-    .card {
-        width: 430px;
-        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-        padding: 15px;
-        border-radius: 10px;
-        text-align: center;
-        flex: 0 0 auto;
-    }
-    .card img {
-        width: 60px;
-        border-radius: 5px;
-        margin-bottom: 8px;
-    }
-    .card h4 {
-        color: #FFD700;
-    }
-    .card p {
-        color: white;
-    }
+        @media (max-width: 768px) {
+            h1 { font-size: 2em !important; }
+            h3 { font-size: 1.3em !important; }
+            p, li { font-size: 0.95em !important; }
+        }
     </style>
+    <div style="text-align: center; padding-top: 20px;">
+        <h1 style="font-size: 3em; color: #39FF14;">What is HistoPulse™?</h1>
+        <p style="color: #CCCCCC; font-size: 1.2em;">
+            HistoPulse™ is our in-house performance rating — tracking the rise, fall, and legacy of every Premier League club.
+        </p>
+    </div>
     """, unsafe_allow_html=True)
-    
-    
-    st.markdown(f"""
-    <div class="scroll-container">
-        <div class="card">
-            <img src="data:image/png;base64,{best_logo_base64}" alt="Best Opponent">
-            <h4>🏆 Best Opponent</h4>
-            <p>{stats['best_opponent']['Opponent']}</p>
-            <p>Win Rate: <b>{stats['best_opponent']['Win Rate']}%</b></p>
-        </div>
-        <div class="card">
-            <img src="data:image/png;base64,{worst_logo_base64}" alt="Worst Opponent">
-            <h4>📉 Worst Opponent</h4>
-            <p>{stats['worst_opponent']['Opponent']}</p>
-            <p>Win Rate: <b>{stats['worst_opponent']['Win Rate']}%</b></p>
-        </div>
-        <div class="card">
-            <img src="data:image/png;base64,{most_played_logo_base64}" alt="Most Played Opponent">
-            <h4>🔄 Most Played Opponent</h4>
-            <p>{stats['most_played_opponent']['Opponent']}</p>
-            <p>Matches Played: <b>{stats['most_played_opponent']['Matches Played']}</b></p>
-        </div>
-        
-       
-        
+
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1f1f1f, #2a2a2a); padding: 25px; border-radius: 16px; color: white; margin-top: 20px;">
+        <h3>📊 How Does the HistoPulse™ System Work?</h3>
+        <ul style="font-size: 15px; line-height: 1.8;">
+            <li><b>Pulse Rating™:</b> Where a team stands right now.</li>
+            <li><b>Pulse Shift™:</b> The rise or fall caused by a single match.</li>
+            <li><b>Pulse Momentum™:</b> A team's recent trajectory over time.</li>
+            <li><b>Legacy Change™:</b> How far a team has climbed or fallen from its historical highs.</li>
+            <li><b>Match Impact™:</b> How influential a match was to a club's HistoPulse journey.</li>
+        </ul>
+        <p style="margin-top: 20px; font-size: 15px;">
+            Our goal is to turn raw numbers into living, breathing stories. Histo isn’t just analytics — it’s football’s emotional rhythm.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="margin-top: 40px;">
+        <h3 style="color: #39FF14;">📉 What HistoPulse™ is <u>NOT</u>:</h3>
+        <ul style="font-size: 15px; color: #CCCCCC;">
+            <li>❌ It’s not a betting model</li>
+            <li>❌ It doesn’t guarantee future outcomes</li>
+            <li>❌ It’s not about spreadsheets — it’s about story arcs</li>
+            <li>❌ It doesn’t judge players — it tracks the journey of teams</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="margin-top: 40px;">
+        <h3 style="color: #39FF14;">📈 Team Example: Arsenal (2022–23)</h3>
+        <p style="font-size: 15px; color: #CCCCCC;">
+            Arsenal started the season with a Pulse Rating™ of 1650. A winning streak gave them a Pulse Surge™ peaking at 1790 by March. A late-season drop — including a draw to Southampton and a loss to Brighton — triggered a Pulse Drop™ of –28.3. Despite finishing 2nd, their Pulse Rating™ held steady at 1752, showing real momentum and legacy rebuild.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="margin-top: 40px;">
+        <h3 style="color: #39FF14;">💚 Our Origin Story</h3>
+        <p style="font-size: 15px; color: #CCCCCC;">
+            Histo was born out of a deep love for football stories — of heroes, champions, friendships, family, expectations, dreams, and banter. We believe that football is more than numbers and tactics. It's an emotional rollercoaster — a pulse. Every rise and fall in a club’s journey should feel like the next page in a story. That’s what HistoPulse™ captures.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.image("Assets/pulse_diagram.png", caption="Sample HistoPulse™ Journey (Visualized)", use_container_width=True)
+
+    st.subheader("📂 Data & Sources")
+    st.markdown("""
+    - Match results sourced from official and publicly available Premier League data.
+    - Ratings based on a football-adapted version of the ELO system.
+    - Match impact logic fine-tuned using win margins, upsets, and contextual weight.
+    """)
+
+    st.subheader("📘 How to Read This App")
+    st.markdown("""
+    - Hover on ⚠️ icons or stats for more context.
+    - “Pulse Rating™” shows current team performance level.
+    - “Pulse Shift™” is the ELO-equivalent rise/fall per match.
+    - “Legacy Change™” tracks progress since a defined point.
+    - Explore the Key Moments tab for emotional peaks and pitfalls.
+    """)
+
+    st.success("Have feedback or want your club featured? Email us at contact@histopulse.com")
+
+    st.markdown("""
+    <div style='text-align: center; margin-top: 50px;'>
+        <hr style='border: none; border-top: 1px solid #333; margin-bottom: 20px;' />
+        <p style='color: #AAAAAA; font-size: 14px;'>Did you find this page helpful?</p>
+        <p style='font-size: 20px;'>👍 👎</p>
     </div>
     """, unsafe_allow_html=True)
 
 
-
-
-
-
-def show_about():
-    st.markdown("""
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <h1 style="margin: 0;">About Histo - Premier League ELO Tracker</h1>
-        </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-        <div style="background: linear-gradient(135deg, #1e3c72, #2a5298); padding: 20px; border-radius: 10px; color: white; text-align: center;">
-            <h3>Welcome to Histo - The Premier League ELO Tracker!</h3>
-            <p>This application provides a detailed historical analysis of Premier League teams using the ELO rating system. 
-               The ELO rating is a dynamic metric that evaluates team strength based on match results and opponent strength.</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    st.subheader("How the ELO System Works")
-    st.markdown("""
-        - **Starting Point:** All teams begin with a base ELO rating of 1000.
-        - **Match Results:** ELO ratings update after every match, rewarding wins and penalizing losses.
-        - **Opponent Strength:** Wins against stronger teams result in larger ELO gains.
-        - **Modifiers:** Late-season matches and away wins have added weight.
-    """)
-
-    # Features Overview with Gradient Cards
-    st.subheader("Application Features")
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #065F46, #0F766E); padding: 20px; border-radius: 12px; box-shadow: 0px 4px 8px rgba(0,0,0,0.2); text-align:center;">
-            <h4 style="color:#39FF14; margin-bottom:10px;">📊 Team Analysis</h4>
-            <p style="color: white; font-size: 14px;">Track ELO progression of individual teams across seasons.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #7F1D1D, #B91C1C); padding: 20px; border-radius: 12px; box-shadow: 0px 4px 8px rgba(0,0,0,0.2); text-align:center;">
-            <h4 style="color:#FF6B6B; margin-bottom:10px;">🏆 Season Overview</h4>
-            <p style="color: white; font-size: 14px;">View how teams rank at the end of each season based on ELO.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #4B0082, #800080); padding: 20px; border-radius: 12px; box-shadow: 0px 4px 8px rgba(0,0,0,0.2); text-align:center;">
-            <h4 style="color:#DDA0DD; margin-bottom:10px;">📜 Club Dashboard</h4>
-            <p style="color: white; font-size: 14px;">Analyze your club's Premier League tenure, best and worst opponents, and more.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Accessibility Section
-    st.subheader("Accessibility & Customization")
-    st.markdown("""
-        - **High Contrast Mode:** Improve visibility for users with visual impairments.
-        - **Text Size Adjustment:** Customize the interface for better readability.
-        - **Keyboard Navigation:** Full keyboard accessibility support.
-    """)
 
 
 # Main function with improved structure
@@ -1433,9 +1315,13 @@ def main():
     
     # Set up the page
     setup_page()
-    
-    # Create header
     create_header()
+    
+    if st.session_state.get("screen_width", 1000) < 1000:
+        cols = st.columns(2)
+    else:
+        cols = st.columns(4)
+
     loader_placeholder = st.empty()
     lp = st.empty()
     loader_placeholder.markdown("""
@@ -1508,9 +1394,7 @@ def main():
     </div>
     </div>
     """)
-    
-    import time
-    time.sleep(5)    
+       
     df = load_data()
         
     if df.empty:
@@ -1524,47 +1408,58 @@ def main():
         
     # Get unique seasons
     seasons = sorted(df["Season"].unique())
-        
-        
     
-     # Initialize active tab in session state if not already set
-    if "active_tab" not in st.session_state:
-        st.session_state.active_tab = "Team Analysis"
+        # Single persistent selection above tabs
+    if "selected_team_global" not in st.session_state:
+        st.session_state["selected_team_global"] = sorted(team_history.keys())[0]
 
-    # Use a radio button for navigation so the selected tab persists
-    tab_options = ["Team Analysis", "Season Overview", "Club Dashboard", "About"]
-    selected_tab = st.radio("Navigation", tab_options, index=tab_options.index(st.session_state.active_tab))
-    st.session_state.active_tab = selected_tab
-    
-    if selected_tab == "Team Analysis":
-        st.subheader("Team Analysis")
-        selected_team = st.selectbox("Select a Team", sorted(team_history.keys()), key="team_analysis_team")
-        multi_season = st.checkbox("Compare Multiple Seasons", value=False)
-        if multi_season:
-            available_seasons = sorted(team_history.get(selected_team, {}).keys())
-            selected_seasons = st.multiselect("Select Seasons", available_seasons,
-                                              default=available_seasons[-2:] if len(available_seasons) >= 2 else available_seasons)
-            settings = {"team": selected_team, "multi_season": True, "seasons": selected_seasons}
+    selected_team = st.selectbox(
+        "Team", 
+        sorted(team_history.keys()), 
+        index=sorted(team_history.keys()).index(st.session_state["selected_team_global"]),
+        key="team_selector_main"
+    )
+
+    # Save selection persistently
+    st.session_state["selected_team_global"] = selected_team
+
+    tab_analysis, tab_season, tab_club, tab_about = st.tabs([
+        "📈 Team Analysis",
+        "🏆 Season Overview",
+        "⚽ Club Performance",
+        "ℹ️ About"
+    ])
+
+    with tab_analysis:
+        available_seasons = sorted(team_history[selected_team].keys())
+        selected_season = st.selectbox(
+            "Select a Season",
+            available_seasons,
+            index=len(available_seasons)-1,
+            key="analysis_selected_season"
+        )
+        settings = {"team": selected_team, "season": selected_season, "multi_season": False}
+        
+        if selected_season in team_history[selected_team]:
+            show_team_analysis(team_history, settings, match_history)
         else:
-            available_seasons = sorted(team_history.get(selected_team, {}).keys())
-            selected_season = st.selectbox("Select a Season", available_seasons)
-            settings = {"team": selected_team, "multi_season": False, "season": selected_season}
-        show_team_analysis(team_history, settings, match_history)
+            st.warning(f"{selected_team} did not play in {selected_season}.")
 
-    elif selected_tab == "Season Overview":
-        st.subheader("Season Overview")
-        selected_season = st.selectbox("Select Season", seasons)
-        display_mode = st.radio("Display Mode", ["Chart", "Table", "Both"], index=2)
+    with tab_season:
+        selected_season = st.selectbox(
+            "Select Season", seasons, index=len(seasons)-1, key="overview_selected_season"
+        )
+        display_mode = st.radio(
+            "Display Mode", ["Chart", "Table", "Both"], index=2, key="display_mode"
+        )
         settings = {"season": selected_season, "display_mode": display_mode}
         show_season_overview(season_final_elo, settings)
 
-    elif selected_tab == "Club Dashboard":
-        st.subheader("Club Dashboard")
-        selected_team = st.selectbox("Select a Team", sorted(team_history.keys()), key="club_dashboard_team")
+    with tab_club:
         settings = {"team": selected_team}
         show_club_dashboard(match_history, settings)
 
-    elif selected_tab == "About":
+    with tab_about:
         show_about()
     # Add footer with version info
     st.markdown("""
